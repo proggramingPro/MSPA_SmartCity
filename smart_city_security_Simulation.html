@@ -1,0 +1,361 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.dashboard { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; padding: 16px 0 10px; }
+.metric { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px 14px; }
+.metric-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+.metric-value { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+.metric-value.danger { color: var(--color-text-danger); }
+.metric-value.success { color: var(--color-text-success); }
+.metric-value.warning { color: var(--color-text-warning); }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+.btn { padding: 7px 14px; font-size: 13px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: var(--color-background-primary); color: var(--color-text-primary); cursor: pointer; transition: background 0.15s; }
+.btn:hover { background: var(--color-background-secondary); }
+.btn.danger { border-color: var(--color-border-danger); color: var(--color-text-danger); }
+.btn.danger:hover { background: var(--color-background-danger); }
+.btn.success { border-color: var(--color-border-success); color: var(--color-text-success); }
+.btn.success:hover { background: var(--color-background-success); }
+.btn.info { border-color: var(--color-border-info); color: var(--color-text-info); }
+.btn.info:hover { background: var(--color-background-info); }
+.network-area { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 14px; margin-bottom: 12px; }
+canvas#network { width: 100%; height: 240px; display: block; }
+.log-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.log-header-title { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+.log-actions { display: flex; gap: 6px; }
+.log-area { background: var(--color-background-secondary); border-radius: var(--border-radius-lg); padding: 10px 14px; max-height: 200px; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; }
+.log-entry { padding: 3px 0; border-bottom: 0.5px solid var(--color-border-tertiary); display: flex; gap: 10px; align-items: baseline; }
+.log-entry:last-child { border-bottom: none; }
+.log-time { color: var(--color-text-tertiary); min-width: 72px; }
+.log-tag { font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 99px; min-width: 54px; text-align: center; }
+.tag-threat { background: var(--color-background-danger); color: var(--color-text-danger); }
+.tag-block  { background: var(--color-background-warning); color: var(--color-text-warning); }
+.tag-ok     { background: var(--color-background-success); color: var(--color-text-success); }
+.tag-info   { background: var(--color-background-info); color: var(--color-text-info); }
+.log-text { color: var(--color-text-primary); flex: 1; }
+.alert-banner { display: none; padding: 10px 14px; border-radius: var(--border-radius-md); margin-bottom: 10px; font-size: 13px; font-weight: 500; }
+.alert-banner.show { display: block; }
+.alert-banner.danger { background: var(--color-background-danger); color: var(--color-text-danger); border: 0.5px solid var(--color-border-danger); }
+.alert-banner.success { background: var(--color-background-success); color: var(--color-text-success); border: 0.5px solid var(--color-border-success); }
+.storage-note { font-size: 11px; color: var(--color-text-tertiary); margin-top: 6px; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--color-text-secondary); margin-top: 8px; }
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+</style>
+
+<div id="alert-banner" class="alert-banner"></div>
+
+<div class="dashboard">
+  <div class="metric"><div class="metric-label">Active nodes</div><div class="metric-value" id="m-nodes">8</div></div>
+  <div class="metric"><div class="metric-label">Threats detected</div><div class="metric-value danger" id="m-threats">0</div></div>
+  <div class="metric"><div class="metric-label">Packets blocked</div><div class="metric-value warning" id="m-blocked">0</div></div>
+  <div class="metric"><div class="metric-label">System status</div><div class="metric-value success" id="m-status">Secure</div></div>
+</div>
+
+<div class="controls">
+  <button class="btn danger" onclick="simulateAttack('ddos')">Simulate DDoS</button>
+  <button class="btn danger" onclick="simulateAttack('intrusion')">Simulate Intrusion</button>
+  <button class="btn danger" onclick="simulateAttack('malware')">Simulate Malware</button>
+  <button class="btn success" onclick="runFirewall()">Run Firewall Scan</button>
+  <button class="btn" onclick="resetNetwork()">Reset Network</button>
+</div>
+
+<div class="network-area">
+  <canvas id="network"></canvas>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#3266ad"></div>Traffic controller</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#0F6E56"></div>IoT sensor hub</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#534AB7"></div>City data center</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#E24B4A"></div>Compromised node</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#BA7517"></div>Under attack</div>
+  </div>
+</div>
+
+<div class="log-header">
+  <span class="log-header-title">Security event log</span>
+  <div class="log-actions">
+    <button class="btn info" onclick="downloadLog()">Download .txt</button>
+    <button class="btn" onclick="clearStoredLog()">Clear stored log</button>
+  </div>
+</div>
+<div class="log-area" id="log-area"></div>
+<div class="storage-note" id="storage-note">Logs are saved to persistent storage and restored on reload.</div>
+
+<script>
+const canvas = document.getElementById('network');
+const ctx = canvas.getContext('2d');
+function resize() {
+  canvas.width = canvas.offsetWidth * devicePixelRatio;
+  canvas.height = canvas.offsetHeight * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+}
+resize();
+const W = () => canvas.offsetWidth;
+const H = () => canvas.offsetHeight;
+
+const NODE_TYPES = [
+  { label: 'Traffic Ctrl', color: '#3266ad' },
+  { label: 'IoT Hub',      color: '#0F6E56' },
+  { label: 'Data Center',  color: '#534AB7' },
+  { label: 'Camera Net',   color: '#0F6E56' },
+  { label: 'Traffic Ctrl', color: '#3266ad' },
+  { label: 'IoT Hub',      color: '#0F6E56' },
+  { label: 'Smart Grid',   color: '#534AB7' },
+  { label: 'Water Sys',    color: '#3266ad' },
+];
+
+let nodes = [], packets = [], threats = 0, blocked = 0, attackActive = false;
+let logEntries = [];
+
+function nowStr() {
+  const d = new Date();
+  return [d.getFullYear(),
+    String(d.getMonth()+1).padStart(2,'0'),
+    String(d.getDate()).padStart(2,'0')].join('-') + ' ' +
+    [d.getHours(), d.getMinutes(), d.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+}
+
+async function saveLog() {
+  try {
+    await window.storage.set('city_security_log', JSON.stringify(logEntries.slice(-200)));
+    await window.storage.set('city_security_stats', JSON.stringify({ threats, blocked }));
+  } catch(e) {}
+}
+
+async function loadLog() {
+  try {
+    const res = await window.storage.get('city_security_log');
+    if (res && res.value) {
+      logEntries = JSON.parse(res.value);
+      logEntries.forEach(e => renderLogEntry(e, false));
+    }
+    const stats = await window.storage.get('city_security_stats');
+    if (stats && stats.value) {
+      const s = JSON.parse(stats.value);
+      threats = s.threats || 0;
+      blocked = s.blocked || 0;
+      updateMetrics();
+    }
+    document.getElementById('storage-note').textContent =
+      logEntries.length > 0
+        ? `${logEntries.length} log entries restored from persistent storage.`
+        : 'Logs are saved to persistent storage and restored on reload.';
+  } catch(e) {
+    document.getElementById('storage-note').textContent = 'Storage not available — logs will not persist.';
+  }
+}
+
+async function clearStoredLog() {
+  try {
+    await window.storage.delete('city_security_log');
+    await window.storage.delete('city_security_stats');
+    logEntries = [];
+    threats = 0; blocked = 0;
+    document.getElementById('log-area').innerHTML = '';
+    document.getElementById('storage-note').textContent = 'Stored log cleared.';
+    updateMetrics();
+    addLog('Log cleared by user.', 'info');
+  } catch(e) {}
+}
+
+function downloadLog() {
+  const lines = logEntries.map(e => `[${e.time}] [${e.tag.toUpperCase()}] ${e.msg}`).join('\n');
+  const header = `Smart City Security Log\nExported: ${nowStr()}\nTotal entries: ${logEntries.length}\n${'='.repeat(60)}\n\n`;
+  const blob = new Blob([header + lines], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `city_security_log_${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+  addLog('Log exported as .txt file.', 'info');
+}
+
+function renderLogEntry(entry, prepend=true) {
+  const area = document.getElementById('log-area');
+  const el = document.createElement('div');
+  el.className = 'log-entry';
+  el.innerHTML = `<span class="log-time">${entry.time.slice(11)}</span><span class="log-tag tag-${entry.tag}">${entry.tag}</span><span class="log-text">${entry.msg}</span>`;
+  if (prepend) area.prepend(el);
+  else area.append(el);
+  if (area.children.length > 60) area.lastChild.remove();
+}
+
+function addLog(msg, tag='ok') {
+  const entry = { time: nowStr(), tag, msg };
+  logEntries.push(entry);
+  renderLogEntry(entry, true);
+  saveLog();
+}
+
+function showAlert(msg, type) {
+  const b = document.getElementById('alert-banner');
+  b.className = `alert-banner show ${type}`;
+  b.textContent = msg;
+  setTimeout(() => b.className = 'alert-banner', 4000);
+}
+
+function updateMetrics() {
+  document.getElementById('m-threats').textContent = threats;
+  document.getElementById('m-blocked').textContent = blocked;
+  const compromised = nodes.filter(n => n.status === 'compromised').length;
+  const el = document.getElementById('m-status');
+  if (compromised > 0) { el.textContent = 'Breached'; el.className = 'metric-value danger'; }
+  else if (attackActive) { el.textContent = 'Under Attack'; el.className = 'metric-value warning'; }
+  else { el.textContent = 'Secure'; el.className = 'metric-value success'; }
+}
+
+function spawnPacket(from, to, type='normal') {
+  packets.push({ from, to, t: 0, type });
+}
+
+function simulateAttack(type) {
+  attackActive = true;
+  if (type === 'ddos') {
+    threats++;
+    const b = Math.floor(Math.random() * 80 + 40);
+    blocked += b;
+    const ti = Math.floor(Math.random() * nodes.length);
+    nodes[ti].status = 'attack';
+    addLog(`DDoS flood on ${nodes[ti].label} — ${b} packets blocked by firewall.`, 'threat');
+    showAlert('DDoS Attack Detected — Mitigation in progress', 'danger');
+    for (let i = 0; i < 8; i++) {
+      const from = Math.floor(Math.random() * nodes.length);
+      setTimeout(() => spawnPacket(from, ti, 'threat'), i * 120);
+    }
+    setTimeout(() => {
+      nodes[ti].status = 'ok'; attackActive = false;
+      addLog(`DDoS mitigated. ${nodes[ti].label} restored.`, 'ok');
+      updateMetrics();
+    }, 5000);
+  } else if (type === 'intrusion') {
+    threats++;
+    const ti = Math.floor(Math.random() * nodes.length);
+    nodes[ti].status = 'compromised';
+    addLog(`Intrusion on ${nodes[ti].label} — unauthorized access. Node isolated.`, 'threat');
+    showAlert('Intrusion Detected — Node isolated', 'danger');
+    spawnPacket(Math.floor(Math.random() * nodes.length), ti, 'threat');
+  } else if (type === 'malware') {
+    threats++;
+    const si = Math.floor(Math.random() * nodes.length);
+    const di = (si + 1) % nodes.length;
+    nodes[si].status = 'attack';
+    addLog(`Malware spread attempt: ${nodes[si].label} → ${nodes[di].label}. Quarantined.`, 'threat');
+    showAlert('Malware Propagation Attempt Blocked', 'danger');
+    spawnPacket(si, di, 'threat');
+    setTimeout(() => {
+      nodes[si].status = 'ok'; attackActive = false; blocked++;
+      addLog(`Malware quarantined. ${nodes[si].label} clean.`, 'block');
+      updateMetrics();
+    }, 3000);
+  }
+  updateMetrics();
+}
+
+function runFirewall() {
+  const comp = nodes.filter(n => n.status === 'compromised');
+  if (comp.length === 0) {
+    addLog('Firewall scan complete — no threats found. All nodes healthy.', 'ok');
+    showAlert('Firewall scan complete — Network is clean', 'success');
+  } else {
+    comp.forEach(n => { n.status = 'ok'; blocked++; });
+    addLog(`Firewall removed ${comp.length} compromised node(s). Network restored.`, 'block');
+    showAlert('Threats quarantined — Network restored', 'success');
+  }
+  attackActive = false;
+  for (let i = 0; i < nodes.length; i++) {
+    const j = (i + 1) % nodes.length;
+    setTimeout(() => spawnPacket(i, j, 'scan'), i * 80);
+  }
+  updateMetrics();
+}
+
+function resetNetwork() {
+  nodes.forEach(n => n.status = 'ok');
+  packets = []; attackActive = false;
+  addLog('Network reset by operator. All nodes nominal.', 'info');
+  updateMetrics();
+}
+
+function initNodes() {
+  nodes = NODE_TYPES.map((t, i) => {
+    const angle = (i / NODE_TYPES.length) * Math.PI * 2 - Math.PI / 2;
+    const r = Math.min(W(), H()) * 0.35;
+    return { id: i, x: W()/2 + r*Math.cos(angle), y: H()/2 + r*Math.sin(angle), ...t, status: 'ok', pulse: 0 };
+  });
+}
+
+function nodeColor(n) {
+  if (n.status === 'compromised') return '#E24B4A';
+  if (n.status === 'attack') return '#BA7517';
+  return n.color;
+}
+
+function draw() {
+  const w = W(), h = H();
+  ctx.clearRect(0, 0, w, h);
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i+1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      if (Math.hypot(a.x-b.x, a.y-b.y) < w*0.55) {
+        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+        ctx.strokeStyle = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+        ctx.lineWidth = 0.5; ctx.stroke();
+      }
+    }
+  }
+
+  packets = packets.filter(p => p.t < 1);
+  packets.forEach(p => {
+    const a = nodes[p.from], b = nodes[p.to];
+    const x = a.x + (b.x-a.x)*p.t, y = a.y + (b.y-a.y)*p.t;
+    ctx.beginPath(); ctx.arc(x, y, p.type==='threat' ? 5 : 3.5, 0, Math.PI*2);
+    ctx.fillStyle = p.type==='threat' ? '#E24B4A' : p.type==='scan' ? '#3266ad' : (dark?'#aaa':'#888');
+    ctx.fill(); p.t += 0.012;
+  });
+
+  if (Math.random() < 0.04) {
+    const from = Math.floor(Math.random()*nodes.length);
+    const to = Math.floor(Math.random()*nodes.length);
+    if (from !== to) spawnPacket(from, to, 'normal');
+  }
+
+  nodes.forEach(n => {
+    n.pulse = (n.pulse + 0.05) % (Math.PI*2);
+    if (n.status === 'attack' || n.status === 'compromised') {
+      ctx.beginPath(); ctx.arc(n.x, n.y, 22+8+Math.sin(n.pulse)*5, 0, Math.PI*2);
+      ctx.strokeStyle = n.status==='compromised' ? 'rgba(226,75,74,0.4)' : 'rgba(186,117,23,0.4)';
+      ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(n.x, n.y, 22, 0, Math.PI*2);
+    ctx.fillStyle = nodeColor(n); ctx.fill();
+    ctx.strokeStyle = dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)';
+    ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = '500 10px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(n.label.length > 10 ? n.label.slice(0,9)+'…' : n.label, n.x, n.y);
+  });
+  requestAnimationFrame(draw);
+}
+
+initNodes();
+loadLog().then(() => {
+  addLog('System started. All nodes online. Firewall active.', 'ok');
+});
+draw();
+
+setInterval(() => {
+  if (!attackActive && Math.random() < 0.3) {
+    const msgs = [
+      'Heartbeat check — all sensors nominal.',
+      'Encrypted tunnel refreshed between nodes.',
+      'Anomaly score within safe threshold.',
+      'IDS signature database updated.',
+      'SSL certificate verified for Smart Grid.',
+    ];
+    addLog(msgs[Math.floor(Math.random()*msgs.length)], 'ok');
+  }
+}, 5000);
+</script>
